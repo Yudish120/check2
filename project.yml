@@ -8,8 +8,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    CURRENT_PROJECT_VERSION: "40"
-    MARKETING_VERSION: "0.4.0"
+    CURRENT_PROJECT_VERSION: "42"
+    MARKETING_VERSION: "0.4.2"
     IPHONEOS_DEPLOYMENT_TARGET: "16.0"
     ENABLE_USER_SCRIPT_SANDBOXING: NO
 
@@ -19,12 +19,7 @@ targets:
     platform: iOS
     sources:
       - path: App
-        excludes:
-          - LaunchScreen.storyboard
       - path: Shared
-    resources:
-      - path: App/LaunchScreen.storyboard
-      - path: App/OLCRTC_COMMIT.txt
     info:
       path: App/Info.plist
     settings:
