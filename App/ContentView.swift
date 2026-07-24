@@ -24,7 +24,7 @@ struct ContentView: View {
         .tint(.cyan)
         .background(AppBackground())
         .ignoresSafeArea(.keyboard)
-        .environment(\.dynamicTypeSize, .small ... .large)
+        .dynamicTypeSize(.small ... .large)
     }
 }
 
