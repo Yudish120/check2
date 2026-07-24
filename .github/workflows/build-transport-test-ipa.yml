@@ -1,0 +1,114 @@
+name: Build WhiteList iPhone + Matched Server
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 50
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.5"
+          cache: false
+
+      - name: Install tools
+        shell: bash
+        run: |
+          set -euxo pipefail
+          brew install xcodegen
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Initialize gomobile
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          gomobile init
+
+      - name: Build iOS core and matched Linux server
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          bash scripts/build_olcrtc_ios.sh
+          cat OLCRTC_COMMIT.txt
+          file olcrtc-linux-amd64
+
+      - name: Verify native iPhone project
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -f App/LaunchScreen.storyboard
+          test -f App/OLCRTC_COMMIT.txt
+          grep -Fq "UILaunchStoryboardName" App/Info.plist
+          grep -Fq "LaunchScreen" App/Info.plist
+          grep -Fq "copyDiagnostics" App/AppModel.swift
+          grep -Fq "BOOL succeeded = MobileCheck" Shared/OLCBridge.m
+
+      - name: Generate Xcode project
+        shell: bash
+        run: xcodegen generate
+
+      - name: Build unsigned IPA
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf build Payload WhiteListTransportTest-unsigned.ipa build.log
+
+          xcodebuild \
+            -project WhiteListTransportTest.xcodeproj \
+            -scheme WhiteListTransportTest \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            OTHER_LDFLAGS='$(inherited) -lresolv' \
+            CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER=NO \
+            build | tee build.log
+
+          APP="build/Build/Products/Release-iphoneos/WhiteListTransportTest.app"
+          test -d "$APP"
+          test -f "$APP/LaunchScreen.storyboardc/Info.plist"
+
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          /usr/bin/zip -qry WhiteListTransportTest-unsigned.ipa Payload
+
+          shasum -a 256 \
+            WhiteListTransportTest-unsigned.ipa \
+            olcrtc-linux-amd64
+
+      - name: Upload IPA and matched server
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhiteList-0.4.0-iPhone-and-Matched-Server
+          path: |
+            WhiteListTransportTest-unsigned.ipa
+            olcrtc-linux-amd64
+            OLCRTC_COMMIT.txt
+            scripts/install_matched_server.sh
+            build.log
+          if-no-files-found: error
+
+      - name: Upload failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhiteList-0.4.0-failed-build
+          path: |
+            build.log
+            OLCRTC_COMMIT.txt
+          if-no-files-found: ignore
